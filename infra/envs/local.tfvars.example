@@ -1,0 +1,36 @@
+# Local environment — add-in on localhost:3000, functions run locally via `func start`.
+#
+# Usage:
+#   cp infra/envs/local.tfvars.example infra/envs/local.tfvars
+#   terraform apply -var-file=envs/local.tfvars
+#
+# Use this when developing entirely on your machine: the add-in runs on the Vite
+# dev server (https://localhost:3000) and the functions run via `func start`.
+# Azure infra (Service Bus, storage) is still provisioned — only the code runs locally.
+# Pair with src/addin/.env.local for the add-in build.
+
+# ── Azure subscription ─────────────────────────────────────────────────────────
+subscription_id = "REPLACE_WITH_YOUR_SUBSCRIPTION_ID"
+
+# ── Identity ───────────────────────────────────────────────────────────────────
+tenant_id = "REPLACE_WITH_YOUR_TENANT_ID"
+client_id = "REPLACE_WITH_YOUR_CLIENT_ID"
+
+# App ID URI for local — set this on the App Registration under
+# "Expose an API" → Application ID URI (SETUP.md Step 1a).
+# Must match VITE_API_SCOPE (without the /access_as_user suffix) in src/addin/.env.local.
+api_audience = "api://localhost:3000/REPLACE_WITH_YOUR_CLIENT_ID"
+
+# ── Deployment ─────────────────────────────────────────────────────────────────
+location     = "uksouth"
+name_prefix  = "oaddintest"   # ≤12 chars after stripping hyphens
+swa_location = "westeurope"
+
+# Origin the add-in is served from — localhost for local.
+add_in_origin = "https://localhost:3000"
+
+# ── Tagging (Indicium/Mesh AI policy) ─────────────────────────────────────────
+owner_email = "firstname.lastname@mesh-ai.com"
+end_date    = "170826"
+project     = "outlook-addin-test-harness"
+description = "Outlook add-in test harness — local."

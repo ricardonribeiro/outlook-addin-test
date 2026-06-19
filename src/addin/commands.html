@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Enquiry Sync — Function Runtime</title>
+    <!--
+      This page is never shown to the user.
+      Its sole purpose is to host the Office.js function runtime:
+        1. Office.js loads and initialises the Office environment.
+        2. commands.ts registers syncToTestApi() via Office.actions.associate().
+      When the user clicks "Sync to Test API", Outlook loads this page in a hidden
+      runtime and calls the registered function directly — no task pane opens.
+    -->
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+    ></script>
+  </head>
+  <body>
+    <script type="module" src="./commands.ts"></script>
+  </body>
+</html>

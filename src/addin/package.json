@@ -1,0 +1,22 @@
+{
+  "name": "outlook-addin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build --mode dev",
+    "preview": "vite preview",
+    "build:manifest": "node ../../scripts/build-manifest.js",
+    "build:prod": "tsc && vite build && node ../../scripts/build-manifest.js"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "^3.0.0",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/office-js": "1.0.592",
+    "office-addin-dev-certs": "2.0.9",
+    "typescript": "6.0.3",
+    "vite": "8.0.16"
+  }
+}
