@@ -3,8 +3,7 @@
 .claude/
 src/addin/manifest.prod.xml
 
-local.settings.json
-
+*.settings.json
 
 
 

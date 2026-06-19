@@ -37,12 +37,22 @@ resource "azurerm_servicebus_queue" "submission" {
   # Duplicate detection: the submission-receiver sets the Service Bus messageId to the
   # email itemId so the platform deduplicates re-sends of the same email.
   requires_duplicate_detection          = true
-  duplicate_detection_history_time_window = "PT10M"
+  duplicate_detection_history_time_window = "PT10S"
 
   lock_duration              = "PT1M"   # how long a consumer has before message re-appears
   max_delivery_count         = 5        # after 5 failures the message goes to dead-letter
   dead_lettering_on_message_expiration = true
   default_message_ttl        = "P14D"   # 14 days
+}
+
+# Authorization rule for the Function App — send+listen, no manage.
+# Avoids requiring Managed Identity RBAC (which needs Owner on the subscription).
+resource "azurerm_servicebus_namespace_authorization_rule" "func" {
+  name         = "func-rule"
+  namespace_id = azurerm_servicebus_namespace.main.id
+  listen       = true
+  send         = true
+  manage       = false
 }
 
 # ── Storage Account (required by the Functions host) ──────────────────────────
@@ -196,17 +206,18 @@ resource "azurerm_linux_function_app" "main" {
 
     # Blob storage — used by submission_receiver and download_generator
     "STORAGE_ACCOUNT_NAME"  = azurerm_storage_account.main.name
+    "STORAGE_ACCOUNT_KEY"   = azurerm_storage_account.main.primary_access_key
     "BLOB_CONTAINER_NAME"   = azurerm_storage_container.submissions.name
 
-    # Service Bus — identity-based, no connection strings
-    "SERVICEBUS_FQDN"       = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
-    "SERVICEBUS_QUEUE_NAME" = azurerm_servicebus_queue.submission.name
+    # Service Bus — connection string auth (no Managed Identity RBAC needed)
+    "SERVICEBUS_FQDN"            = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+    "SERVICEBUS_QUEUE_NAME"      = azurerm_servicebus_queue.submission.name
+    "SERVICEBUS_CONNECTION_STRING" = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
 
-    # Identity-based connection for the Service Bus queue trigger binding.
-    # The binding's `connection` parameter is "ServiceBusConnection"; the host reads
-    # ServiceBusConnection__fullyQualifiedNamespace to discover the namespace and
-    # uses the Function App's Managed Identity to authenticate.
-    "ServiceBusConnection__fullyQualifiedNamespace" = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+    # Connection string for the Service Bus queue trigger binding.
+    # The binding's `connection` parameter is "ServiceBusConnection"; setting it
+    # as a plain connection string bypasses Managed Identity RBAC requirements.
+    "ServiceBusConnection" = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
 
     # Tell Oryx (Azure remote build) to install Python deps from requirements.txt on publish.
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"

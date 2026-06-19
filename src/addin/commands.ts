@@ -216,6 +216,14 @@ async function downloadPayload(event: Office.AddinCommands.Event): Promise<void>
   await notify(item, 'info', 'Preparing download…');
 
   try {
+    const filename = buildZipFilename(item.subject ?? '');
+    const hasOpenBrowser = typeof (Office.context.ui as { openBrowserWindow?: unknown }).openBrowserWindow === 'function';
+
+    log.info('downloadPayload: building ZIP', { filename });
+    const { zipBlob } = await buildZip(item);
+    log.info('downloadPayload: ZIP ready', { sizeBytes: zipBlob.size });
+
+    // Always acquire token and upload to blob for storage record.
     let token: string;
     try {
       log.info('downloadPayload: acquiring NAA token');
@@ -237,11 +245,7 @@ async function downloadPayload(event: Office.AddinCommands.Event): Promise<void>
     }
 
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
-
-    log.info('downloadPayload: building ZIP');
-    const { zipBlob } = await buildZip(item);
     const contentBase64 = await blobToBase64(zipBlob);
-    log.info('downloadPayload: ZIP ready', { sizeBytes: zipBlob.size });
 
     const controller = new AbortController();
     const timerId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -250,7 +254,7 @@ async function downloadPayload(event: Office.AddinCommands.Event): Promise<void>
       response = await fetch(`${apiBase}/api/downloads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ contentBase64, filename: 'submission.zip' }),
+        body: JSON.stringify({ contentBase64, filename }),
         signal: controller.signal,
       });
     } finally {
@@ -265,14 +269,24 @@ async function downloadPayload(event: Office.AddinCommands.Event): Promise<void>
     }
 
     const { downloadUrl } = await response.json() as DownloadResponse;
-    log.info('downloadPayload: got SAS URL, opening browser');
+    log.info('downloadPayload: triggering download', { hasOpenBrowser });
 
-    if (typeof (Office.context.ui as { openBrowserWindow?: unknown }).openBrowserWindow === 'function') {
+    if (hasOpenBrowser) {
+      // Win32 / New Outlook: open SAS URL in system browser.
       Office.context.ui.openBrowserWindow(downloadUrl);
     } else {
-      window.open(downloadUrl, '_blank');
+      // OWA: SAS URL is cross-origin so <a download> would just navigate.
+      // Use an object URL (same-origin) from the already-built in-memory blob instead.
+      const objectUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
     }
-    await notify(item, 'info', 'Download ready — opening in browser.');
+    await notify(item, 'info', 'Download ready.');
   } catch (err: unknown) {
     const isTimeout = (err as { name?: string })?.name === 'AbortError';
     log.error('downloadPayload: failed', { timeout: isTimeout, error: String((err as Error)?.message ?? err) });
@@ -357,6 +371,16 @@ async function buildZip(item: Office.MessageRead): Promise<ZipResult> {
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   log.info('buildZip: ZIP ready', { sizeBytes: zipBlob.size });
   return { zipBlob };
+}
+
+function buildZipFilename(subject: string): string {
+  const shortId = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+  const slug = subject
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return slug ? `SUB-${shortId}-${slug}.zip` : `SUB-${shortId}.zip`;
 }
 
 function notify(

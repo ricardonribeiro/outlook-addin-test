@@ -16,6 +16,7 @@ import base64
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -23,7 +24,7 @@ import azure.functions as func
 from azure.identity import DefaultAzureCredential
 
 from shared.auth import TokenValidationError, validate_token
-from shared.blob import generate_write_sas, upload_json, upload_zip
+from shared.blob import generate_write_sas, upload_zip
 from shared.models import (
     AttachmentUploadSlot,
     PrepareResponse,
@@ -139,9 +140,8 @@ def submission_prepare(req: func.HttpRequest) -> func.HttpResponse:
 
 
 # ── submission-receiver ───────────────────────────────────────────────────────
-# Called after all attachments are uploaded directly to blob. Validates the token,
-# writes submission/{submissionId}/payload.json, and enqueues a lightweight message
-# containing the payloadPath for the downstream consumer to fetch.
+# Called after all attachments are uploaded directly to blob. Validates the token
+# and enqueues the full submission payload — consumer receives everything inline.
 
 
 @app.route(route="submissions", methods=["POST", "OPTIONS"], auth_level=func.AuthLevel.ANONYMOUS)
@@ -204,35 +204,19 @@ def submission_receiver(req: func.HttpRequest) -> func.HttpResponse:
         correlation_id,
     )
 
-    # Write the enriched payload to blob as the permanent submission record.
-    blob_name = f"submission/{submission_id}/payload.json"
-    payload_data = {
-        **body,
-        "receivedAt": received_at,
-        "authenticatedUpn": authenticated_upn,
-    }
-    try:
-        payload_path = upload_json(payload_data, blob_name, _azure_credential)
-    except Exception as exc:
-        log.error("Failed to write payload.json for %s: %s", submission_id, exc)
-        return func.HttpResponse(
-            json.dumps({"error": "Failed to write submission — see function logs"}),
-            status_code=500,
-            mimetype="application/json",
-            headers=_cors(),
-        )
-
-    log.info("payload.json written path=%s", payload_path)
-
-    # Enqueue a lightweight message — consumer fetches payloadPath for full data.
+    # Enqueue the full payload — consumer receives everything inline, no blob fetch needed.
     queue_message: SubmissionQueueMessage = {
         "submissionId": submission_id,
-        "payloadPath": payload_path,
+        "messageId": message_id,
         "correlationId": correlation_id,
+        "sender": body.get("sender", ""),
+        "recipients": body.get("recipients", []),
+        "subject": body.get("subject", ""),
+        "timestamp": body.get("timestamp", ""),
+        "bodyText": body.get("bodyText", ""),
+        "attachments": body.get("attachments", []),
         "receivedAt": received_at,
         "authenticatedUpn": authenticated_upn,
-        "sender": body.get("sender", ""),
-        "subject": body.get("subject", ""),
     }
     try:
         send_to_queue(queue_message, message_id=message_id)
@@ -249,7 +233,6 @@ def submission_receiver(req: func.HttpRequest) -> func.HttpResponse:
 
     response: SubmissionResponse = {
         "submissionId": submission_id,
-        "payloadPath": payload_path,
         "receivedAt": received_at,
         "correlationId": correlation_id,
     }
@@ -321,7 +304,8 @@ def download_generator(req: func.HttpRequest) -> func.HttpResponse:
             headers=_cors(),
         )
 
-    blob_name = f"downloads/{uuid.uuid4()}.zip"
+    safe_name = re.sub(r'[^A-Za-z0-9._-]', '-', filename)[:80] or 'download.zip'
+    blob_name = f"downloads/{safe_name}"
     try:
         _, sas_url = upload_zip(content, blob_name, filename, _azure_credential)
     except Exception as exc:

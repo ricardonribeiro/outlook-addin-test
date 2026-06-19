@@ -38,3 +38,15 @@ output "addin_deploy_token" {
   value       = azurerm_static_web_app.addin.api_key
   sensitive   = true
 }
+
+output "storage_account_key" {
+  description = "Storage account primary access key — populate STORAGE_ACCOUNT_KEY and AzureWebJobsStorage in dev.settings.json."
+  value       = azurerm_storage_account.main.primary_access_key
+  sensitive   = true
+}
+
+output "service_bus_connection_string" {
+  description = "Service Bus func-rule connection string — populate SERVICEBUS_CONNECTION_STRING and ServiceBusConnection in dev.settings.json."
+  value       = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
+  sensitive   = true
+}

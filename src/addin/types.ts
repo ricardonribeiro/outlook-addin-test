@@ -17,7 +17,7 @@ export interface AttachmentWithContent extends AttachmentInfo {
 
 // Returned by /api/submissions/prepare — one entry per attachment
 export interface AttachmentUploadSlot extends AttachmentInfo {
-  blobPath: string;    // stable path stored in payload.json
+  blobPath: string;    // stable blob path — included in the queue message
   uploadUrl: string;   // write SAS URL valid for 15 min — use for direct PUT
 }
 
@@ -43,7 +43,6 @@ export interface SubmissionPayload {
 // POST /api/submissions response
 export interface SubmissionResponse {
   submissionId: string;
-  payloadPath: string;   // stable blob reference to submission/{SUB-XXXXX}/payload.json
   receivedAt: string;
   correlationId: string;
 }

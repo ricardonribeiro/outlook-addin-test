@@ -24,7 +24,7 @@ class AttachmentUploadSlot(TypedDict):
     name: str
     mimeType: str
     sizeBytes: int
-    blobPath: str    # e.g. "attachments/550e8400-e29b.pdf" — stable, stored in payload.json
+    blobPath: str    # e.g. "attachments/550e8400-e29b.pdf" — stable blob path
     uploadUrl: str   # write SAS URL valid for 15 minutes — used for the direct PUT
 
 
@@ -53,20 +53,23 @@ class SubmissionPayload(TypedDict):
 class SubmissionResponse(TypedDict):
     """What /api/submissions returns."""
     submissionId: str
-    payloadPath: str    # stable blob path to submission/SUB-XXXXX/payload.json
     receivedAt: str
     correlationId: str
 
 
-class SubmissionQueueMessage(TypedDict, total=False):
-    """Lightweight message written to Service Bus — consumer fetches payloadPath for full data."""
+class SubmissionQueueMessage(TypedDict):
+    """Full submission written to Service Bus — consumer receives everything it needs inline."""
     submissionId: str
-    payloadPath: str        # consumer reads this blob to get the full submission
+    messageId: str
     correlationId: str
+    sender: str
+    recipients: list[str]
+    subject: str
+    timestamp: str
+    bodyText: str
+    attachments: list[AttachmentRef]
     receivedAt: str
     authenticatedUpn: str
-    sender: str             # denormalised for cheap filtering without fetching the blob
-    subject: str
 
 
 REQUIRED_PAYLOAD_FIELDS = (
