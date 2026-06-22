@@ -56,6 +56,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: src/addin/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/addin
+        run: npm ci
+
+      - name: Build add-in
+        working-directory: src/addin
+        run: npm run build
+
       - name: Deploy to Azure Static Web App
         uses: Azure/static-web-apps-deploy@v1
         with:
