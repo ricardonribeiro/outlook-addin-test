@@ -2,6 +2,8 @@
 
 .claude/
 src/addin/manifest.prod.xml
+src/addin/manifest.local.xml
+src/addin/manifest.dev.xml
 
 *.settings.json
 

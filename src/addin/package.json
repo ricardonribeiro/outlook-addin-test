@@ -6,8 +6,9 @@
     "dev": "vite",
     "build": "tsc && vite build --mode dev",
     "preview": "vite preview",
-    "build:manifest": "node ../../scripts/build-manifest.js",
-    "build:prod": "tsc && vite build && node ../../scripts/build-manifest.js"
+    "build:manifest:local": "node ../../scripts/build-manifest.js local",
+    "build:manifest:dev": "node ../../scripts/build-manifest.js dev",
+    "build:manifest": "npm run build:manifest:local && npm run build:manifest:dev"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.0.0",
