@@ -96,6 +96,15 @@ resource "azurerm_storage_container" "submissions" {
   container_access_type = "private"
 }
 
+# Deployment-package container for the Flex Consumption Function App.
+# Flex uploads the build artifact here on publish (referenced by
+# storage_container_endpoint on azurerm_function_app_flex_consumption.main).
+resource "azurerm_storage_container" "deployment" {
+  name                  = "deploymentpackage"
+  storage_account_id    = azurerm_storage_account.main.id
+  container_access_type = "private"
+}
+
 resource "azurerm_storage_management_policy" "submissions_lifecycle" {
   storage_account_id = azurerm_storage_account.main.id
 
@@ -104,7 +113,7 @@ resource "azurerm_storage_management_policy" "submissions_lifecycle" {
     enabled = true
     filters {
       blob_types   = ["blockBlob"]
-      prefix_match = ["submissions/submission/", "submissions/attachments/"]
+      prefix_match = ["submissions/attachments/"]
     }
     actions {
       base_blob {
@@ -150,35 +159,55 @@ resource "azurerm_application_insights" "main" {
   tags                = local.common_tags
 }
 
-# ── Function App (Consumption Y1 — change sku_name to EP1 for Premium) ────────
+# ── Function App (Flex Consumption FC1) ───────────────────────────────────────
+# Flex Consumption replaces classic Linux Consumption (Y1). It provisions onto a
+# different scale infrastructure that avoids the post-create 503 / stuck-SCM state
+# the Y1 plan exhibited. Key differences from azurerm_linux_function_app:
+#   • runtime is set via runtime_name/runtime_version (no application_stack block)
+#   • the deployment package lives in a blob container (storage_container_endpoint),
+#     not a content file share — so no WEBSITE_CONTENTSHARE
+#   • Python deps are always remote-built; SCM_DO_BUILD_DURING_DEPLOYMENT is unused
+#   • AzureWebJobsStorage must be set explicitly (no storage_account_name arg)
+# Ask before changing to Premium (EP1).
 
 resource "azurerm_service_plan" "main" {
   name                = "${var.name_prefix}-asp"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   os_type             = "Linux"
-  sku_name            = "Y1" # Consumption plan; ask before changing to Premium
+  sku_name            = "FC1" # Flex Consumption; ask before changing to Premium (EP1)
   tags                = local.common_tags
 }
 
-resource "azurerm_linux_function_app" "main" {
-  name                       = "${var.name_prefix}-func"
-  resource_group_name        = azurerm_resource_group.main.name
-  location                   = azurerm_resource_group.main.location
-  storage_account_name       = azurerm_storage_account.main.name
-  storage_account_access_key = azurerm_storage_account.main.primary_access_key
-  service_plan_id            = azurerm_service_plan.main.id
-  functions_extension_version = "~4"
+resource "azurerm_function_app_flex_consumption" "main" {
+  name                = "${var.name_prefix}-func"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  service_plan_id     = azurerm_service_plan.main.id
 
-  # System-assigned Managed Identity — grants Service Bus access without connection strings.
+  # Deployment storage — Flex stores the deployment package in a blob container.
+  # Connection-string auth keeps parity with the rest of the stack (no Managed
+  # Identity RBAC required).
+  storage_container_type      = "blobContainer"
+  storage_container_endpoint  = "${azurerm_storage_account.main.primary_blob_endpoint}${azurerm_storage_container.deployment.name}"
+  storage_authentication_type = "StorageAccountConnectionString"
+  storage_access_key          = azurerm_storage_account.main.primary_access_key
+
+  # Runtime — Flex sets this directly (replaces the application_stack block).
+  runtime_name    = "python"
+  runtime_version = "3.13"
+
+  instance_memory_in_mb  = 2048
+  maximum_instance_count = 100
+
+  # System-assigned Managed Identity — kept for potential future use; auth currently uses connection strings.
   identity {
     type = "SystemAssigned"
   }
 
   site_config {
-    application_stack {
-      python_version = "3.13"
-    }
+    # Application Insights — provider writes the APPLICATIONINSIGHTS_CONNECTION_STRING setting.
+    application_insights_connection_string = azurerm_application_insights.main.connection_string
 
     # CORS: allow the add-in origin. Code-level CORS in function_app.py handles
     # local dev; this handles Azure-deployed traffic.
@@ -192,10 +221,8 @@ resource "azurerm_linux_function_app" "main" {
   }
 
   app_settings = {
-    "FUNCTIONS_WORKER_RUNTIME" = "python"
-
-    # Application Insights
-    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.main.connection_string
+    # Functions host storage — Flex does not auto-provision AzureWebJobsStorage.
+    "AzureWebJobsStorage" = azurerm_storage_account.main.primary_connection_string
 
     # JWT validation
     "TENANT_ID"    = var.tenant_id
@@ -218,9 +245,6 @@ resource "azurerm_linux_function_app" "main" {
     # The binding's `connection` parameter is "ServiceBusConnection"; setting it
     # as a plain connection string bypasses Managed Identity RBAC requirements.
     "ServiceBusConnection" = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
-
-    # Tell Oryx (Azure remote build) to install Python deps from requirements.txt on publish.
-    "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
   }
 
   tags = local.common_tags

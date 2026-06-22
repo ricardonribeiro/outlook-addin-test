@@ -8,15 +8,16 @@ All Azure resources for the Outlook add-in test harness. Terraform provisions in
 |---|---|
 | Resource group | Container for all resources |
 | Service Bus namespace (Standard) | Needed for duplicate detection |
-| Service Bus queue `enquiry-queue` | Duplicate detection enabled; dead-lettering after 5 failures |
-| Storage account | Required by the Azure Functions host |
+| Service Bus queue `submission-queue` | Duplicate detection enabled; dead-lettering after 5 failures |
+| Service Bus authorization rule (`func-rule`) | Send+listen connection string for the Function App (no Managed Identity RBAC) |
+| Storage account | Functions host storage + blob storage for submissions/downloads |
+| Blob container `submissions` | Submission ZIPs and download artifacts (30/7-day lifecycle expiry) |
+| Blob container `deploymentpackage` | Flex Consumption deployment artifact |
 | Log Analytics workspace | Backend for Application Insights |
 | Application Insights | Function logs and correlationId traces |
-| App Service Plan (Consumption Y1) | Hosts the Function App |
-| Linux Function App (Python 3.11, v4) | Hosts both functions |
-| System-assigned Managed Identity | Lets the Function App authenticate to Service Bus |
-| Role: Data Sender (namespace scope) | Function App can write to `enquiry-queue` |
-| Role: Data Receiver (namespace scope) | Function App can read from `enquiry-queue` |
+| App Service Plan (Flex Consumption `FC1`) | Hosts the Function App |
+| Function App (Flex Consumption, Python 3.13, v4) | Hosts both functions |
+| Static Web App (Free) | Hosts the add-in (dev environment) |
 
 ---
 
@@ -32,6 +33,15 @@ Do this first. Follow `SETUP.md` Step 1. Record:
 Terraform does **not** manage the App Registration — it requires manual portal steps (authorising Office client IDs for SSO) that cannot be automated.
 
 ### Step 2 — Fill in variables
+
+Two environments are available. They differ **only in where the add-in and the Function App run** (which sets `api_audience`, the JWT audience the function validates):
+
+| Env | Add-in runs on | Function App runs on |
+|---|---|---|
+| `local` | Vite dev server (`https://localhost:3000`) | local Functions host (`func start`) |
+| `dev` | Azure Static Web App | deployed on Azure |
+
+In **both** environments the Service Bus namespace and the Storage Account are always provisioned in Azure — there are no local or emulated equivalents. In `local` mode the locally-running Functions host connects to those same cloud resources. Both envs also share one `name_prefix`, so they manage the **same** Azure resources and state file; switching env only changes the live `API_AUDIENCE` and CORS values.
 
 Use the environment-specific file that matches what you're deploying:
 

@@ -1,15 +1,15 @@
 output "function_app_hostname" {
   description = "Base URL of the Function App — use as VITE_API_BASE_URL in src/addin/.env.* and as the API endpoint in the add-in manifest."
-  value       = "https://${azurerm_linux_function_app.main.default_hostname}"
+  value       = "https://${azurerm_function_app_flex_consumption.main.default_hostname}"
 }
 
 output "function_app_name" {
   description = "Function App resource name — used in: func azure functionapp publish <name>"
-  value       = azurerm_linux_function_app.main.name
+  value       = azurerm_function_app_flex_consumption.main.name
 }
 
 output "service_bus_fqdn" {
-  description = "Service Bus namespace FQDN — use as SERVICEBUS_FQDN and ServiceBusConnection__fullyQualifiedNamespace in local.settings.json."
+  description = "Service Bus namespace FQDN — use as SERVICEBUS_FQDN in local.settings.json."
   value       = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
 }
 

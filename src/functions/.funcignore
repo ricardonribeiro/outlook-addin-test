@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+.python-version
+pyproject.toml
+uv.lock
+dev.settings.json
+local.settings.json

@@ -47,15 +47,6 @@ variable "name_prefix" {
   }
 }
 
-variable "add_in_origin" {
-  description = <<-EOT
-    Full origin the add-in is served from — used for CORS on the Function App.
-    Local dev: https://localhost:3000
-    Dev: https://<your-addin-host>
-  EOT
-  type        = string
-}
-
 # ── Mandatory Indicium tagging policy ─────────────────────────────────────────
 # _purpose and _business_criticality are fixed in locals (not user-editable) because
 # the policy pins them for a Testing deployment.
