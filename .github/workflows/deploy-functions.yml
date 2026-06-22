@@ -1,23 +1,27 @@
-name: Deploy Azure Functions
+name: Deploy to Azure
 
 on:
   push:
     paths:
       - 'src/functions/**'
+      - 'src/addin/**'
     branches:
       - main
   workflow_dispatch:
 
-# Required for OIDC token (azure/login).
-# GitHub repo secrets needed: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
-# Set up federated credentials in the App Registration:
+# Required for OIDC token (azure/login) and SWA deploy action.
+# GitHub repo secrets needed:
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID  — for Functions (OIDC)
+#   AZURE_STATIC_WEB_APPS_API_TOKEN                           — for SWA (terraform output addin_deploy_token)
+# Set up OIDC federated credentials in the App Registration:
 #   Subject: repo:ricardonribeiro/outlook-addin-test:ref:refs/heads/main
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy:
+  deploy-functions:
+    name: Deploy Azure Functions
     runs-on: ubuntu-latest
 
     steps:
@@ -44,3 +48,20 @@ jobs:
       - name: Deploy to Azure Functions (Flex Consumption)
         working-directory: src/functions
         run: func azure functionapp publish oaddintest-func --python
+
+  deploy-addin:
+    name: Deploy Static Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Azure Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: src/addin
+          output_location: dist
+          skip_api_build: true
