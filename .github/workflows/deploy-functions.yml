@@ -8,6 +8,14 @@ on:
       - main
   workflow_dispatch:
 
+# Required for OIDC token (azure/login).
+# GitHub repo secrets needed: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+# Set up federated credentials in the App Registration:
+#   Subject: repo:ricardonribeiro/outlook-addin-test:ref:refs/heads/main
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -23,9 +31,16 @@ jobs:
         working-directory: src/functions
         run: uv export --no-dev --no-hashes -o requirements.txt
 
-      - uses: Azure/functions-action@v1
+      - name: Log in to Azure
+        uses: azure/login@v2
         with:
-          app-name: oaddintest-func
-          package: src/functions
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          scm-do-build-during-deployment: true
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Azure Functions Core Tools
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+      - name: Deploy to Azure Functions (Flex Consumption)
+        working-directory: src/functions
+        run: func azure functionapp publish oaddintest-func --python
