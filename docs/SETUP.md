@@ -61,6 +61,7 @@ bc59ab01-8403-45c6-8796-ac3ef710b3e3   (Outlook on the web)
 ### 1d. SPA redirect (for the Office.js SSO / NAA flow)
 - **Authentication -> Add a platform -> Single-page application**.
 - Add `https://localhost:3000/commands.html` and later your deployed add-in URL. (This is the function-command host file, not a task pane.)
+- **Also add the NAA broker redirect** `brk-multihub://localhost:3000` (and `brk-multihub://<swa-hostname>` once deployed). NAA (`createNestablePublicClientApplication`) requires a `brk-multihub://` SPA redirect that is **origin-only** (no `https://`, no path). Without it, token acquisition fails with `AADSTS700046`. The `brk-multihub://` group covers Outlook — don't use a broker-specific `brk-<client-id>://` URI. See deploy.md §2.2.
 
 **Record these — they become Terraform variables and add-in config:**
 - `TENANT_ID` = Directory (tenant) ID

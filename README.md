@@ -196,8 +196,8 @@ If consent is ever required, `getAccessToken` will return error code 13001 or 13
 
 ## Decisions applied (from build brief)
 
-- **Local Service Bus:** real Azure namespace (cheapest reliable path). No local emulator.
-- **Function App plan:** Consumption (Y1). Change `sku_name = "EP1"` in `infra/main.tf` for Premium if needed.
+- **Cloud-only backend:** the Service Bus namespace and the Storage Account are always real Azure resources, in both the `local` and `dev` environments — there is no local/emulated equivalent, so a `local` run's `func start` host connects to the same cloud resources. (`AzureWebJobsStorage`, the Functions host's *internal* storage, can use Azurite locally — that's separate from the provisioned Storage Account.)
+- **Function App plan:** Flex Consumption (`FC1`) — replaced classic Consumption (`Y1`), which got stuck in a persistent post-create `503`. Change `sku_name = "EP1"` in `infra/main.tf` for Premium if needed.
 
 ---
 

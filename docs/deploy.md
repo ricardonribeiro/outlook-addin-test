@@ -30,6 +30,8 @@ Two environments, two files — pick the one you're targeting:
 | `envs/local.tfvars` | Add-in on localhost:3000, functions via `func start` |
 | `envs/dev.tfvars` | Add-in deployed to SWA, functions deployed to Azure |
 
+> The two environments differ only in **where the add-in and Function App run**. The Service Bus namespace and the Storage Account are **always** provisioned in Azure in both cases — there are no local/emulated equivalents, so even a `local` run's `func start` host talks to the same cloud Service Bus and Storage Account. (Both files also share one `name_prefix`, so they target the same resources and state — switching env only changes the live `API_AUDIENCE`/CORS.)
+
 ```bash
 cd infra
 
@@ -119,10 +121,13 @@ Add these two URIs (keep the existing localhost ones):
 
 ```
 https://<swa-hostname>/commands.html
-brk-9199bf20-a13f-4107-85dc-02114787ef48://auth
+brk-multihub://<swa-hostname>
 ```
 
-The first is the fallback redirect for standard MSAL flows. The second is the Office broker redirect URI required for NAA (`createNestablePublicClientApplication`) in Outlook on the Web — Azure AD rejects the default `brk-multihub://` URI, so this specific broker client ID URI is required.
+- The first is the SPA redirect for standard MSAL flows (the page that calls MSAL).
+- The second is the **broker redirect** required for NAA (`createNestablePublicClientApplication`) in Outlook. It must be type **Single-page application**, use the `brk-multihub://` scheme, and contain **only the origin** — the bare hostname, no `https://` and no path. Example: `brk-multihub://proud-pond-0123456789.azurestaticapps.net`.
+
+> **If you skip the `brk-multihub://<swa-hostname>` entry**, the deployed add-in fails token acquisition with `AADSTS700046: Invalid Reply Address … must have scheme brk-<broker-id>:// and be of Single Page Application type`. The error names a *specific* broker client ID, but the `brk-multihub://` group already covers Outlook (plus Word/Excel/PowerPoint/Teams) — registering `brk-multihub://<your-domain>` is what resolves it. Do **not** register a broker-specific `brk-<client-id>://…` URI or append a path like `/auth`; NAA redirect URIs are origin-only. See [Microsoft's NAA guide](https://learn.microsoft.com/en-us/office/dev/add-ins/develop/enable-nested-app-authentication-in-your-add-in#add-a-trusted-broker-through-spa-redirect).
 
 ### 2.3 Update dev.tfvars with the SWA audience
 
@@ -301,31 +306,29 @@ curl -I https://<swa-hostname>/assets/icon-80.png
 
 ## § 5 — Update the manifest and re-sideload
 
-### 5.1 Update manifest.xml for dev deployment
+### 5.1 Generate the dev manifest
 
-Edit `src/addin/manifest.xml` — replace all localhost URLs with the SWA URL:
+`src/addin/manifest.xml` is the localhost source template. Don't hand-edit hosts — generate the environment-specific manifest with the build script, which substitutes the add-in host into every URL, `<AppDomain>`, and the `WebApplicationInfo` App ID URI:
 
-| Element | Find | Replace with |
-|---|---|---|
-| `<Id>` | `REPLACE-WITH-NEW-GUID` | A fresh GUID (`uuidgen` on macOS/Linux, `New-Guid` in PowerShell) |
-| `<IconUrl>` | `https://localhost:3000/assets/icon-80.png` | `https://<swa-hostname>/assets/icon-80.png` |
-| `<HighResolutionIconUrl>` | `https://localhost:3000/assets/icon-80.png` | `https://<swa-hostname>/assets/icon-80.png` |
-| `<SupportUrl>` | `https://localhost:3000` | `https://<swa-hostname>` |
-| `<AppDomain>` | `localhost:3000` | `<swa-hostname>` (no `https://`) |
-| `<SourceLocation>` | `https://localhost:3000/commands.html` | `https://<swa-hostname>/commands.html` |
-| All `<bt:Url>` with `Commands.Url` resid | `https://localhost:3000/commands.html` | `https://<swa-hostname>/commands.html` |
-| All `<bt:Image>` icon resids | `https://localhost:3000/assets/icon-*.png` | `https://<swa-hostname>/assets/icon-*.png` (×6, two VersionOverrides) |
-| `<WebApplicationInfo><Id>` | `REPLACE_WITH_YOUR_CLIENT_ID` | Your actual Client ID |
-| `<WebApplicationInfo><Resource>` | `api://localhost:3000/REPLACE_WITH_YOUR_CLIENT_ID` | `api://<swa-hostname>/<client-id>` |
+```bash
+cd src/addin
+npm run build:manifest:dev     # → src/addin/manifest.dev.xml  (SWA host)
+# local equivalent (no substitution; identical to manifest.xml):
+npm run build:manifest:local   # → src/addin/manifest.local.xml
+# or both at once:
+npm run build:manifest
+```
 
-> The manifest has two VersionOverrides (V1_0 and V1_1). Both `<Resources>` blocks need updating. Use Find & Replace in your editor to catch all occurrences.
+The host for each env is read from the matching `src/addin/.env.<env>` (`VITE_API_SCOPE = api://<host>/<client-id>/…`), so `.env.dev` must have the SWA hostname filled in first (§2.3). Override with `node ../../scripts/build-manifest.js dev --host <hostname>` if needed.
 
-### 5.2 Sideload the updated manifest
+> Both manifests keep the same `<Id>`, so sideload **one at a time** — remove the other first. (If you need the local and dev add-ins installed simultaneously, give each a distinct `<Id>`.)
+
+### 5.2 Sideload the dev manifest
 
 Follow `SETUP.md` Step 7:
 
-- **Outlook on the web / new Outlook on Windows**: Settings → search "add-in" → My add-ins → Add a custom add-in → Add from file → upload the updated `src/addin/manifest.xml`.
-- If the old version was already sideloaded, remove it first, then re-add.
+- **Outlook on the web / new Outlook on Windows**: Settings → search "add-in" → My add-ins → Add a custom add-in → Add from file → upload `src/addin/manifest.dev.xml`.
+- If the old version (localhost or a previous deploy) was already sideloaded, remove it first, then re-add.
 
 ### 5.3 End-to-end test
 
