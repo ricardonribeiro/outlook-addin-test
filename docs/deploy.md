@@ -53,7 +53,6 @@ Open the file and fill in every `REPLACE_WITH_*` value:
 | `owner_email` | Your `firstname.lastname@mesh-ai.com` address |
 | `location` | Azure region for all resources (e.g. `uksouth`) |
 | `name_prefix` | Short prefix, ≤ 12 chars, e.g. `oaddintest` |
-| `add_in_origin` | `https://localhost:3000` for local; SWA hostname for dev |
 | `swa_location` | SWA region — must be one of `westeurope`, `eastus2`, `centralus`, `eastasia`, `westus2` |
 | `end_date` | Leave default `170826` unless you need a different end date |
 
@@ -161,7 +160,7 @@ If you added new scopes or changed the App ID URI, re-grant admin consent:
 ```bash
 cd src/functions
 uv sync                                     # creates/updates .venv
-uv export --no-hashes -o requirements.txt  # Oryx remote build installs from this
+uv export --no-dev --no-hashes -o requirements.txt  # Oryx remote build installs from this
 ```
 
 > `requirements.txt` is the file Azure's Oryx build reads at publish time. Always regenerate it from `pyproject.toml` before publishing if you changed any dependencies.
@@ -179,9 +178,12 @@ You should see output ending with:
 ```
 Syncing triggers...
 Functions in <name>-func:
-    enquiry_receiver - [httpTrigger]
-        Invoke url: https://<name>-func.azurewebsites.net/api/enquiries
-    enquiry_processor - [serviceBusTrigger]
+    submission_prepare - [httpTrigger]
+        Invoke url: https://<name>-func.azurewebsites.net/api/submissions/prepare
+    submission_receiver - [httpTrigger]
+        Invoke url: https://<name>-func.azurewebsites.net/api/submissions
+    download_generator - [httpTrigger]
+        Invoke url: https://<name>-func.azurewebsites.net/api/downloads
     health - [httpTrigger]
         Invoke url: https://<name>-func.azurewebsites.net/api/health
 ```
@@ -206,18 +208,17 @@ Common causes of startup failures:
 - **Import error on startup** — the `shared/` package failed to load. Check `requirements.txt` was exported and includes all deps.
 - **Wrong Python version** — `main.tf` sets `python_version = "3.13"`. Confirm the Functions runtime supports it; otherwise change to `"3.11"`.
 
-### 3.4 Confirm Service Bus role assignments
+### 3.4 Confirm Service Bus connectivity
 
-The Managed Identity needs the role assignments Terraform created. Verify:
+The Function App authenticates to Service Bus using a connection string stored in app settings. Terraform provisions this automatically. Verify the setting is present:
 
 ```bash
-az role assignment list \
-  --scope <service_bus_namespace_id> \
-  --query "[].{role:roleDefinitionName, principal:principalName}" \
-  -o table
+az functionapp config appsettings list \
+  --name <function_app_name> --resource-group <rg_name> \
+  --query "[?name=='ServiceBusConnection']"
 ```
 
-You should see `Azure Service Bus Data Sender` and `Azure Service Bus Data Receiver` assigned to the Function App's managed identity. If missing, re-run `terraform apply`.
+If the `ServiceBusConnection` setting is missing, re-run `terraform apply`.
 
 ---
 
@@ -356,7 +357,7 @@ You should see `enquiry_received` and `enquiry_processing` events with the same 
 
 ```bash
 cd src/functions
-uv export --no-hashes -o requirements.txt
+uv export --no-dev --no-hashes -o requirements.txt
 func azure functionapp publish <function_app_name>
 ```
 
@@ -405,7 +406,7 @@ The MSAL NAA broker didn't respond within 10 seconds.
 Check:
 1. The App Registration has the correct **Authorized client applications** (the 6 Office host GUIDs from `SETUP.md` Step 1b).
 2. Admin consent is granted for the `access_as_user` scope (`SETUP.md` Step 1c).
-3. The SPA redirect URI `brk-9199bf20-a13f-4107-85dc-02114787ef48://auth` is registered (§2.2 above).
+3. The SPA redirect URI `brk-multihub://<swa-hostname>` is registered (§2.2 above).
 4. The `VITE_API_SCOPE` in the built add-in matches the App ID URI registered on the App Registration.
 
 ### "Sign-in required — open the add-in task pane once"
@@ -428,13 +429,13 @@ The `dist/` directory didn't contain `commands.html` when you deployed. Confirm 
 
 ```bash
 az servicebus queue show \
-  --name enquiry-queue \
+  --name submission-queue \
   --namespace-name <namespace-name> \
   --resource-group <rg_name> \
   --query "{active:countDetails.activeMessageCount, dlq:countDetails.deadLetterMessageCount}"
 ```
 
-If `deadLetterMessageCount` is climbing, the `enquiry-processor` is failing. Check the function logs. If `activeMessageCount` is climbing, the trigger binding isn't connecting — confirm `ServiceBusConnection__fullyQualifiedNamespace` is set correctly and the Managed Identity role assignments exist (§3.4).
+If `deadLetterMessageCount` is climbing, check the function logs for processing errors. If `activeMessageCount` is climbing, the trigger binding isn't connecting — confirm the `ServiceBusConnection` app setting is present and correct (§3.4).
 
 ---
 

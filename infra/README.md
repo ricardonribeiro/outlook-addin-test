@@ -88,7 +88,7 @@ Terraform provisions infra only. Deploy the Python code separately:
 ```bash
 cd ../src/functions
 uv sync                                      # ensure venv is up to date
-uv export --no-hashes -o requirements.txt   # Oryx installs from this on remote build
+uv export --no-dev --no-hashes -o requirements.txt   # Oryx installs from this on remote build
 func azure functionapp publish <function-app-name-from-step-4>
 ```
 
@@ -97,28 +97,17 @@ The remote Oryx build reads `requirements.txt` and installs Python dependencies.
 
 ### Step 6 — Wire up the add-in
 
-1. Put `function_app_hostname` into `src/addin/.env.dev` as `VITE_API_BASE_URL`.
-2. Edit `src/addin/manifest.xml`:
-   - `<SourceLocation>` and `<AppDomains>` → your deployed add-in host URL.
-   - `<WebApplicationInfo><Id>` → your `client_id`.
-   - `<WebApplicationInfo><Resource>` → your `api_audience`.
-3. Build and redeploy the add-in; re-sideload the updated manifest (see `SETUP.md` Step 6–7).
+1. Generate the manifest:
+   ```bash
+   cd src/addin
+   npm run build:manifest:dev   # → src/addin/manifest.dev.xml
+   # Sideload manifest.dev.xml in Outlook (remove any existing version first).
+   ```
+2. Put `function_app_hostname` into `src/addin/.env.dev` as `VITE_API_BASE_URL`.
 
-### Step 7 — Grant your user Service Bus roles (local dev)
+### Step 7 — Service Bus connection (local dev)
 
-`DefaultAzureCredential` uses your `az login` identity locally. Your account needs the data roles:
-
-```bash
-az role assignment create \
-  --assignee <your-upn-or-object-id> \
-  --role "Azure Service Bus Data Sender" \
-  --scope <service_bus_namespace_id from terraform output>
-
-az role assignment create \
-  --assignee <your-upn-or-object-id> \
-  --role "Azure Service Bus Data Receiver" \
-  --scope <service_bus_namespace_id from terraform output>
-```
+For local dev, `ServiceBusConnection` and `SERVICEBUS_CONNECTION_STRING` in `local.settings.json` use the connection string from `terraform output service_bus_connection_string`. No role assignment is needed.
 
 ---
 

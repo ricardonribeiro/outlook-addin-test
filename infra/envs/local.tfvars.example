@@ -26,9 +26,6 @@ location     = "uksouth"
 name_prefix  = "oaddintest"   # ≤12 chars after stripping hyphens
 swa_location = "westeurope"
 
-# Origin the add-in is served from — localhost for local.
-add_in_origin = "https://localhost:3000"
-
 # ── Tagging (Indicium/Mesh AI policy) ─────────────────────────────────────────
 owner_email = "firstname.lastname@mesh-ai.com"
 end_date    = "170826"

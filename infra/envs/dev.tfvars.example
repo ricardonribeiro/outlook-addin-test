@@ -4,17 +4,17 @@
 #   cp infra/envs/dev.tfvars.example infra/envs/dev.tfvars
 #   terraform apply -var-file=envs/dev.tfvars
 #
-# The SWA hostname (needed for api_audience and add_in_origin) is only known
-# AFTER the first Terraform apply. Follow this two-step workflow:
+# The SWA hostname (needed for api_audience) is only known AFTER the first
+# Terraform apply. Follow this two-step workflow:
 #
-#   Step 1 — first apply (use local.tfvars, or set api_audience to the localhost placeholder):
+#   Step 1 — first apply (use local.tfvars):
 #     terraform apply -var-file=envs/local.tfvars
 #
 #   Step 2 — get the SWA hostname:
 #     terraform output addin_url
 #     # e.g. https://proud-pond-0123456789.azurestaticapps.net
 #
-#   Step 3 — fill in the two SWA placeholders below, then apply again:
+#   Step 3 — fill in the SWA placeholder below, then apply again:
 #     terraform apply -var-file=envs/dev.tfvars
 #
 # Pair with src/addin/.env.dev for the add-in build (npm run build uses --mode dev).
@@ -36,9 +36,6 @@ api_audience = "api://REPLACE_WITH_SWA_HOSTNAME/REPLACE_WITH_YOUR_CLIENT_ID"
 location     = "uksouth"
 name_prefix  = "oaddintest"   # must match what was used in the first apply
 swa_location = "westeurope"
-
-# Origin the add-in is served from — SWA hostname for dev.
-add_in_origin = "https://REPLACE_WITH_SWA_HOSTNAME"
 
 # ── Tagging (Indicium/Mesh AI policy) ─────────────────────────────────────────
 owner_email = "firstname.lastname@mesh-ai.com"
