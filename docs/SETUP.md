@@ -92,22 +92,7 @@ For NAA SSO, the URI format is `api://<host>/<client-id>`, where `<host>` must m
 
 Click **Add scope**.
 
-### 1.3 Authorise Office host applications
-
-**Expose an API → Authorized client applications → Add a client application**
-
-Add each of the following GUIDs and tick the `access_as_user` scope. These are the Office hosts that are allowed to request tokens silently — without them `getAccessToken()` fails.
-
-```
-d3590ed6-52b3-4102-aeff-aad2292ab01c   Microsoft Office (desktop)
-ea5a67f6-b6f3-4338-b240-c655ddc3cc8e   Microsoft Office (alt)
-57fb890c-0dab-4253-a5e0-7188c88b2bb4   Office on the web
-08e18876-6177-487e-b8b5-cf950c1e598c   Office on the web / SharePoint
-bc59ab01-8403-45c6-8796-ac3ef710b3e3   Outlook on the web
-93d53678-613d-4013-afc1-62e9e444a0a5   Office on the web (other)
-```
-
-### 1.4 API permissions
+### 1.3 API permissions
 
 **API permissions**
 
@@ -115,25 +100,23 @@ bc59ab01-8403-45c6-8796-ac3ef710b3e3   Outlook on the web
 - Click **Add a permission → My APIs → outlook-addin-test → Delegated permissions → access_as_user → Add**.
 - Click **Grant admin consent for \<your tenant\>** and confirm.
 
-### 1.5 SPA redirect URIs (NAA broker)
+### 1.4 SPA redirect URIs (NAA broker)
 
 **Authentication → Add a platform → Single-page application**
 
 Add the following redirect URIs:
 
-- `https://localhost:3000/commands.html`
-- `brk-multihub://localhost:3000`
+| URI | When |
+|---|---|
+| `brk-multihub://localhost:3000` | Local dev |
+| `brk-multihub://<swa-hostname>` | After SWA deploy |
+| `https://<swa-hostname>/commands.html` | After SWA deploy |
 
-The `brk-multihub://` entry is the NAA broker redirect required by `createNestablePublicClientApplication`. It must be origin-only — no `https://`, no path. Without it, token acquisition fails with `AADSTS700046`.
+The `brk-multihub://` entries are the NAA broker redirects required by `createNestablePublicClientApplication`. They must be origin-only — no `https://`, no path. Without them, token acquisition fails with `AADSTS700046`.
 
-After deploying to Azure Static Web Apps, add the corresponding SWA URIs here as well:
+See `docs/deploy.md §2.2` for the SWA redirect URIs once the hostname is known.
 
-- `https://<swa-hostname>/commands.html`
-- `brk-multihub://<swa-hostname>`
-
-See `docs/deploy.md` for the full deployment walkthrough.
-
-### 1.6 Values to record
+### 1.5 Values to record
 
 You will use these in every configuration file that follows:
 

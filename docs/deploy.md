@@ -116,14 +116,14 @@ The `api://` URI must match the domain the add-in is served from. The local URI 
 
 **Azure Portal → Entra ID → App registrations → `outlook-addin-test` → Authentication → Single-page application:**
 
-Add these two URIs (keep the existing localhost ones):
+Add these two URIs (keep the existing `brk-multihub://localhost:3000` entry):
 
 ```
 https://<swa-hostname>/commands.html
 brk-multihub://<swa-hostname>
 ```
 
-- The first is the SPA redirect for standard MSAL flows (the page that calls MSAL).
+- The first is the SPA redirect for standard MSAL flows.
 - The second is the **broker redirect** required for NAA (`createNestablePublicClientApplication`) in Outlook. It must be type **Single-page application**, use the `brk-multihub://` scheme, and contain **only the origin** — the bare hostname, no `https://` and no path. Example: `brk-multihub://proud-pond-0123456789.azurestaticapps.net`.
 
 > **If you skip the `brk-multihub://<swa-hostname>` entry**, the deployed add-in fails token acquisition with `AADSTS700046: Invalid Reply Address … must have scheme brk-<broker-id>:// and be of Single Page Application type`. The error names a *specific* broker client ID, but the `brk-multihub://` group already covers Outlook (plus Word/Excel/PowerPoint/Teams) — registering `brk-multihub://<your-domain>` is what resolves it. Do **not** register a broker-specific `brk-<client-id>://…` URI or append a path like `/auth`; NAA redirect URIs are origin-only. See [Microsoft's NAA guide](https://learn.microsoft.com/en-us/office/dev/add-ins/develop/enable-nested-app-authentication-in-your-add-in#add-a-trusted-broker-through-spa-redirect).
