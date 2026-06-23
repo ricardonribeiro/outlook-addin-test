@@ -110,7 +110,7 @@ In both environments the Service Bus namespace and Storage Account are real Azur
 
 ## Quick start — local dev
 
-Full step-by-step instructions, including App Registration setup, are in [`docs/SETUP.md`](docs/SETUP.md).
+Full step-by-step instructions, including App Registration setup, are in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ```bash
 # 1. Provision infra (first time only)
@@ -145,7 +145,7 @@ npm run dev                           # https://localhost:3000
 
 ## Quick start — deploy to Azure
 
-Full step-by-step instructions are in [`docs/deploy.md`](docs/deploy.md).
+Full step-by-step instructions are in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ```bash
 # Functions
