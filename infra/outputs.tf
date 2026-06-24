@@ -45,8 +45,7 @@ output "storage_account_key" {
   sensitive   = true
 }
 
-output "service_bus_connection_string" {
-  description = "Service Bus func-rule connection string — populate SERVICEBUS_CONNECTION_STRING and ServiceBusConnection in dev.settings.json."
-  value       = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
-  sensitive   = true
+output "service_bus_queue_id" {
+  description = "Service Bus queue resource ID — use as --scope when granting your user the Data Sender/Receiver roles for local dev."
+  value       = azurerm_servicebus_queue.submission.id
 }

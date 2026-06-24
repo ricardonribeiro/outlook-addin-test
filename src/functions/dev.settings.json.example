@@ -12,10 +12,9 @@
     "STORAGE_ACCOUNT_KEY": "<storage-account-key>",
     "BLOB_CONTAINER_NAME": "submissions",
 
-    "SERVICEBUS_CONNECTION_STRING": "<func-rule-primary-connection-string>",
     "SERVICEBUS_FQDN": "<your-namespace>.servicebus.windows.net",
     "SERVICEBUS_QUEUE_NAME": "submission-queue",
 
-    "ServiceBusConnection": "<func-rule-primary-connection-string>"
+    "ServiceBusConnection__fullyQualifiedNamespace": "<your-namespace>.servicebus.windows.net"
   }
 }

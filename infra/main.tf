@@ -45,15 +45,29 @@ resource "azurerm_servicebus_queue" "submission" {
   default_message_ttl        = "P14D"   # 14 days
 }
 
-# Authorization rule for the Function App — send+listen, no manage.
-# Avoids requiring Managed Identity RBAC (which needs Owner on the subscription).
-resource "azurerm_servicebus_namespace_authorization_rule" "func" {
-  name         = "func-rule"
-  namespace_id = azurerm_servicebus_namespace.main.id
-  listen       = true
-  send         = true
-  manage       = false
-}
+# Service Bus RBAC — must be granted manually (requires Owner / User Access Administrator).
+#
+# After `terraform apply`, run once:
+#
+#   QUEUE_ID=$(terraform output -raw service_bus_queue_id)
+#   FUNC_PRINCIPAL=$(az functionapp identity show \
+#     --name <func-name> --resource-group <rg> --query principalId -o tsv)
+#
+#   az role assignment create \
+#     --role "Azure Service Bus Data Sender" \
+#     --assignee "$FUNC_PRINCIPAL" --scope "$QUEUE_ID"
+#
+#   az role assignment create \
+#     --role "Azure Service Bus Data Receiver" \
+#     --assignee "$FUNC_PRINCIPAL" --scope "$QUEUE_ID"
+#
+# Grant your own identity the same two roles if you want local `az login` dev to work:
+#   az role assignment create \
+#     --role "Azure Service Bus Data Sender" \
+#     --assignee <your-object-id> --scope "$QUEUE_ID"
+#   az role assignment create \
+#     --role "Azure Service Bus Data Receiver" \
+#     --assignee <your-object-id> --scope "$QUEUE_ID"
 
 # ── Storage Account (required by the Functions host) ──────────────────────────
 # Name rules: 3–24 chars, lowercase alphanumeric only, globally unique.
@@ -200,7 +214,7 @@ resource "azurerm_function_app_flex_consumption" "main" {
   instance_memory_in_mb  = 2048
   maximum_instance_count = 100
 
-  # System-assigned Managed Identity — kept for potential future use; auth currently uses connection strings.
+  # System-assigned Managed Identity — used for Service Bus send/receive (RBAC roles assigned below).
   identity {
     type = "SystemAssigned"
   }
@@ -236,15 +250,14 @@ resource "azurerm_function_app_flex_consumption" "main" {
     "STORAGE_ACCOUNT_KEY"   = azurerm_storage_account.main.primary_access_key
     "BLOB_CONTAINER_NAME"   = azurerm_storage_container.submissions.name
 
-    # Service Bus — connection string auth (no Managed Identity RBAC needed)
-    "SERVICEBUS_FQDN"            = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
-    "SERVICEBUS_QUEUE_NAME"      = azurerm_servicebus_queue.submission.name
-    "SERVICEBUS_CONNECTION_STRING" = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
+    # Service Bus — Managed Identity auth via DefaultAzureCredential (sender SDK)
+    # and the __fullyQualifiedNamespace convention (queue trigger binding).
+    "SERVICEBUS_FQDN"       = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+    "SERVICEBUS_QUEUE_NAME" = azurerm_servicebus_queue.submission.name
 
-    # Connection string for the Service Bus queue trigger binding.
-    # The binding's `connection` parameter is "ServiceBusConnection"; setting it
-    # as a plain connection string bypasses Managed Identity RBAC requirements.
-    "ServiceBusConnection" = azurerm_servicebus_namespace_authorization_rule.func.primary_connection_string
+    # The double-underscore suffix tells the Functions host to authenticate with
+    # Managed Identity rather than a connection string.
+    "ServiceBusConnection__fullyQualifiedNamespace" = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
   }
 
   tags = local.common_tags

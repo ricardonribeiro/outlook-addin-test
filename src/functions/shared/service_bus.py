@@ -1,14 +1,9 @@
 """
 Service Bus sender.
 
-In Azure: the Function App's system-assigned identity has the
-'Azure Service Bus Data Sender' role on the namespace (granted by Terraform).
-DefaultAzureCredential resolves to Managed Identity — no connection string needed.
-
-Locally: DefaultAzureCredential falls back to 'az login' credentials, which need
-the 'Azure Service Bus Data Sender' role. If that role hasn't been granted, set
-SERVICEBUS_CONNECTION_STRING in local.settings.json with the namespace's primary
-connection string — that bypasses the RBAC requirement entirely.
+Always uses DefaultAzureCredential — in Azure this resolves to the Function App's
+system-assigned Managed Identity (Azure Service Bus Data Sender role on the queue).
+Locally it falls back to 'az login' credentials, which need the same role.
 """
 
 import hashlib
@@ -36,13 +31,8 @@ def send_to_queue(payload: dict, *, message_id: str) -> None:
     stronger guarantees across the duplicate detection window.
     """
     queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
-    conn_str = os.getenv("SERVICEBUS_CONNECTION_STRING", "")
-
-    if conn_str:
-        client_ctx = ServiceBusClient.from_connection_string(conn_str)
-    else:
-        fqdn = os.environ["SERVICEBUS_FQDN"]
-        client_ctx = ServiceBusClient(fqdn, credential=_credential)
+    fqdn = os.environ["SERVICEBUS_FQDN"]
+    client_ctx = ServiceBusClient(fqdn, credential=_credential)
 
     # Service Bus message IDs are capped at 128 chars; Outlook itemIds are 200+.
     # SHA-256 hex (64 chars) is collision-resistant and deterministic for the same email.

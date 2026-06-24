@@ -330,8 +330,8 @@ def download_generator(req: func.HttpRequest) -> func.HttpResponse:
 # ── submission-processor (Service Bus queue trigger) ─────────────────────────
 #
 # %SERVICEBUS_QUEUE_NAME% expands the app setting at runtime.
-# Connection uses ServiceBusConnection (connection string locally,
-# ServiceBusConnection__fullyQualifiedNamespace + Managed Identity in Azure).
+# ServiceBusConnection__fullyQualifiedNamespace tells the Functions host to
+# authenticate with the function app's Managed Identity (no connection string).
 
 # @app.service_bus_queue_trigger(
 #     arg_name="msg",

@@ -212,10 +212,47 @@ Save these values somewhere accessible (a password manager or notes file — NOT
 function_app_hostname  = https://<name>-func.azurewebsites.net
 function_app_name      = <name>-func
 service_bus_fqdn       = <name>-sbns.servicebus.windows.net
-service_bus_namespace_id = /subscriptions/.../servicebus/namespaces/<name>-sbns
+service_bus_queue_id   = /subscriptions/.../servicebus/namespaces/<name>-sbns/queues/submission-queue
 addin_url              = https://<random-slug>.azurestaticapps.net
 addin_deploy_token     = <token>   ← sensitive, keep private
 ```
+
+### 2.4 Grant Service Bus RBAC roles (manual — requires Owner or User Access Administrator)
+
+Terraform cannot create role assignments with a standard Contributor identity. Run these once after the first apply.
+
+```bash
+QUEUE_ID=$(terraform output -raw service_bus_queue_id)
+
+# Function App managed identity:
+FUNC_PRINCIPAL=$(az functionapp identity show \
+  --name <function_app_name> --resource-group <rg_name> \
+  --query principalId -o tsv)
+
+az role assignment create \
+  --role "Azure Service Bus Data Sender" \
+  --assignee "$FUNC_PRINCIPAL" --scope "$QUEUE_ID"
+
+az role assignment create \
+  --role "Azure Service Bus Data Receiver" \
+  --assignee "$FUNC_PRINCIPAL" --scope "$QUEUE_ID"
+```
+
+Grant your own identity the same two roles so local `az login` dev works:
+
+```bash
+MY_ID=$(az ad signed-in-user show --query id -o tsv)
+
+az role assignment create \
+  --role "Azure Service Bus Data Sender" \
+  --assignee "$MY_ID" --scope "$QUEUE_ID"
+
+az role assignment create \
+  --role "Azure Service Bus Data Receiver" \
+  --assignee "$MY_ID" --scope "$QUEUE_ID"
+```
+
+Role propagation takes up to 5 minutes. You only need to do this once per deployment.
 
 ---
 
@@ -239,10 +276,9 @@ Fill `local.settings.json` using the values from `terraform output`:
 | `STORAGE_ACCOUNT_NAME` | From `terraform output storage_account_name` |
 | `STORAGE_ACCOUNT_KEY` | From `terraform output storage_account_key` |
 | `BLOB_CONTAINER_NAME` | From Terraform output |
-| `SERVICEBUS_CONNECTION_STRING` | From `terraform output service_bus_connection_string` |
-| `ServiceBusConnection` | Same value as `SERVICEBUS_CONNECTION_STRING` |
 | `SERVICEBUS_FQDN` | From `terraform output service_bus_fqdn` |
 | `SERVICEBUS_QUEUE_NAME` | `submission-queue` |
+| `ServiceBusConnection__fullyQualifiedNamespace` | Same value as `SERVICEBUS_FQDN` (e.g. `<name>-sbns.servicebus.windows.net`) |
 
 `local.settings.json` is gitignored — never commit it.
 
@@ -428,15 +464,15 @@ Common causes of startup failures:
 - **Import error on startup** — the `shared/` package failed to load. Check `requirements.txt` was exported and includes all deps.
 - **Wrong Python version** — `main.tf` sets `python_version = "3.13"`. Confirm the Functions runtime supports it; otherwise change to `"3.11"`.
 
-Confirm Service Bus connectivity — Terraform provisions this automatically, but verify the setting is present:
+Confirm Service Bus connectivity — verify the managed identity setting is present:
 
 ```bash
 az functionapp config appsettings list \
   --name <function_app_name> --resource-group <rg_name> \
-  --query "[?name=='ServiceBusConnection']"
+  --query "[?name=='ServiceBusConnection__fullyQualifiedNamespace']"
 ```
 
-If the `ServiceBusConnection` setting is missing, re-run `terraform apply`.
+If the setting is missing, re-run `terraform apply`. If the setting is present but sends fail with 401, the RBAC roles haven't propagated yet — wait 5 minutes and retry (see §2.4).
 
 ### 5.4 Deploy the add-in to Static Web Apps
 
@@ -622,7 +658,7 @@ az servicebus queue show \
   --query "{active:countDetails.activeMessageCount, dlq:countDetails.deadLetterMessageCount}"
 ```
 
-If `deadLetterMessageCount` is climbing, check the function logs for processing errors. If `activeMessageCount` is climbing, the trigger binding isn't connecting — confirm the `ServiceBusConnection` app setting is present and correct (§5.3).
+If `deadLetterMessageCount` is climbing, check the function logs for processing errors. If `activeMessageCount` is climbing, the trigger binding isn't connecting — confirm the `ServiceBusConnection__fullyQualifiedNamespace` app setting is present (§5.3) and that the RBAC roles were granted (§2.4).
 
 ---
 
